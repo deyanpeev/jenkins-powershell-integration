@@ -1,0 +1,51 @@
+pipeline {
+    parameters {
+        string(name: "FILE_PREFIX", 
+            defaultValue: "SimpleFile",
+            description: "This is a initial file name prefix string")
+    }
+
+    options {
+        ansiColor('xterm')
+    }
+
+    agent {
+        label "WIN_AGENT"
+    }
+
+    environment {
+        GITBRANCH       = 'execution'
+        GITREPO         = 'git@github.com:deyanpeev/jenkins-powershell-integration.git'
+        GIT_CREDENTIALS = 'GitHub_SSH_PrivateKey'
+    }
+
+    stages {
+        stage("Download repository") {
+            steps {
+                git branch: "${env.GITBRANCH}", 
+                    url: "${env.GITREPO}", 
+                    credentialsId: "${env.GIT_CREDENTIALS}"
+            }
+        }
+        stage("Execute powershell") {
+            steps {
+                powershell """
+                    . "${env.WORKSPACE}\\scripts\\executable.ps1" `
+                     -Prefix "${env.FILE_PREFIX}" 
+                """
+            }
+        }
+        stage("Git push") {
+            steps {
+                sshagent(["${GIT_CREDENTIALS}"]) {
+                    powershell """                        
+                        git pull origin ${env.GITBRANCH}
+                        git add . 
+                        git commit -m "Publishing new file" 
+                        git push origin ${env.GITBRANCH}
+                    """     
+                }
+            }
+        }
+    }
+}
