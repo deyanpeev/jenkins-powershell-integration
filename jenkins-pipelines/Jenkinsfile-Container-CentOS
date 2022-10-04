@@ -1,0 +1,44 @@
+
+pipeline {
+    agent any
+
+    parameters {
+        string(name: "ФИЛЕPREFIX", defaultValue: "JsonFiles/old.json", description: "Old File To Compare")
+    }
+
+    environment {
+        GITBRANCH       = 'execution'
+        GITREPO         = 'git@github.com:deyanpeev/jenkins-powershell-integration.git'
+        GIT_CREDENTIALS = 'GitHub_SSH_PrivateKey'
+    }
+
+    stages {
+        stage("Download repository") {
+            steps {
+                git branch: "${env.GITBRANCH}", url: "${env.GITREPO}", credentialsId: "${env.GIT_CREDENTIALS}"
+            }
+        }
+        stage("Execute powershell") {
+            steps {
+                powershell '. "$ENV:WORKSPACE\\scripts\executable.ps1" -Prefix $($env:PREFIX)'
+            }
+        }
+        stage("Upload repo") {
+            steps {
+                withCredentials([sshUserPrivateKey(credentialsId: 'gitlab', 
+                        keyFileVariable: 'KEY_FILE', passphraseVariable: 'PASS', usernameVariable: 'USER')]) {
+                    sh """
+                        git config --global user.email "admin@example.com"
+                        git config --global user.name "${USER}"
+                    
+                        git pull origin ${env.GITBRANCH}
+                        git add .
+                        git commit -am "Git commit files"
+                        
+                        git push --set-upstream origin ${env.GITBRANCH}
+                    """
+                }
+            }
+        }
+    }
+}
